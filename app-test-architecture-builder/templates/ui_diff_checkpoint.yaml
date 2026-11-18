@@ -1,0 +1,31 @@
+appId: ${app_id}
+---
+# UI Diff checkpoint 共用 subflow。
+# 呼叫端只需要先設定 output.uiDiffCheckpointName,再 runFlow 這支 subflow 一行,
+# 「開關邏輯」、「截圖命名」、「去重管理」統一在這裡維護,不用每個 checkpoint 各自重複寫 when 判斷。
+#
+# 內部管理機制:
+# - 維護 output.uiDiffRegisteredCheckpoints 陣列,記錄已截圖的 checkpoint 名稱
+# - 同名 checkpoint 只截圖一次,後續呼叫自動跳過
+# - 配合 ui_diff_enabled 開關,關閉時完全不執行
+#
+# 已實測確認:
+# - ${} 動態插值當 takeScreenshot 檔名合法
+# - runFlow when 搭配 -e/env 帶入的字串變數比較合法
+
+# 正規化開關（沒傳 -e ui_diff_enabled 時直接引用會 ReferenceError）
+- evalScript: "${output.uiDiffOn = (typeof ui_diff_enabled !== 'undefined' && ui_diff_enabled == 'true')}"
+# 初始化已註冊清單(如果還不存在)
+- evalScript: ${output.uiDiffRegisteredCheckpoints = output.uiDiffRegisteredCheckpoints || []}
+
+# 檢查當前 checkpoint 是否已註冊過
+- evalScript: ${output.uiDiffIsNewCheckpoint = !output.uiDiffRegisteredCheckpoints.includes(output.uiDiffCheckpointName)}
+
+# 只有在「開關開啟」且「首次遇到此 checkpoint」時才截圖
+- runFlow:
+    when:
+      true: ${output.uiDiffOn && output.uiDiffIsNewCheckpoint}
+    commands:
+      - takeScreenshot: chk_${output.uiDiffCheckpointName}
+      # 註冊此 checkpoint,避免重複截圖
+      - evalScript: ${output.uiDiffRegisteredCheckpoints.push(output.uiDiffCheckpointName)}

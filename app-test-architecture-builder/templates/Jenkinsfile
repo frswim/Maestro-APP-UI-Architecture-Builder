@@ -1,0 +1,49 @@
+// M15 CI 模板（Jenkins，內網 / 自架裝置 lab）
+// - agent：接了實機或模擬器的 Mac mini（label 依環境），iOS 一定要 macOS agent
+// - 機密：HashiCorp Vault plugin 注入成環境變數；設定檔只放 key 名
+// - 裝置：Lockable Resources plugin 鎖裝置，避免兩個 job 搶同一台
+// - 報表與證據：archiveArtifacts + 轉存內網保存區（M17）；通知只走內網 IM / mail relay
+pipeline {
+  agent { label 'mobile-lab-mac' }
+  options { timeout(time: 90, unit: 'MINUTES'); buildDiscarder(logRotator(numToKeepStr: '60')) }
+  parameters {
+    choice(name: 'TARGET_ENV', choices: ['sit', 'uat'], description: '測試環境')
+    choice(name: 'PLATFORM', choices: ['android', 'ios'], description: '平台')
+    string(name: 'BRAND', defaultValue: 'default')
+    string(name: 'TAGS', defaultValue: 'smoke', description: 'smoke / regression / hotfix')
+  }
+  triggers { cron('H 20 * * 1-5') }   // 夜間回歸；PR/merge 觸發由 Bitbucket/Git webhook 設定
+  stages {
+    stage('Health check') {
+      steps { sh './scripts/device_health_check.sh > healthy_devices.txt || true' }   // 模板 templates/device_health_check.sh（Android，輸出健康 serial）；iOS 自行改寫
+    }
+    stage('Test') {
+      steps {
+        lock(label: "device-${params.PLATFORM}", quantity: 1, variable: 'LOCKED_DEVICE') {
+          withVault(configuration: [vaultUrl: env.VAULT_ADDR, vaultCredentialId: 'vault-approle'],
+                    vaultSecrets: [[path: 'secret/mobile-qa/<app>', secretValues: [
+                      [envVar: 'TEST_USER_PW', vaultKey: 'test_user_pw'],
+                      [envVar: 'OTP_SEED',     vaultKey: 'otp_seed'] ]]]) {
+            // healthy_devices.txt（Health check 產出）可用來決定要鎖哪些裝置 / 排除不健康的裝置
+            // Maestro 版：DEVICE=$LOCKED_DEVICE ./scripts/run_suite.sh $BRAND flows/ -- --include-tags $TAGS
+            // Appium/Java 版：
+            sh '''
+              ./mvnw -B test -P"${PLATFORM}" -Dbrand="${BRAND}" -Denv="${TARGET_ENV}" \
+                 -Ddevice="${LOCKED_DEVICE}" -Dgroups="${TAGS}"
+            '''
+          }
+        }
+      }
+    }
+  }
+  post {
+    always {
+      // Maestro 版：run_suite.sh 已產報表，這行可省；Appium/Java 版：generate_report.py 讀的是 maestro.log，
+      // 要改成讀 Listener 輸出的 results/<run>/*.json（tool-adaptation.md §3）或改用 Allure
+      sh 'python3 scripts/generate_report.py "$(ls -td test-results/*/ | head -1)" || true'
+      archiveArtifacts artifacts: 'report*.html, test-results/**, .last_run_status.json', allowEmptyArchive: true
+      sh './scripts/archive_evidence.sh || true'     // M17：遮罩 → manifest(SHA-256) → 內網保存區
+      sh "NOTIFY_WEBHOOK_URL=\"\$INTRANET_WEBHOOK\" scripts/notify.sh ${currentBuild.currentResult == 'SUCCESS' ? 0 : 1} '${params.BRAND}/${params.TARGET_ENV}/${params.PLATFORM}' '${env.BUILD_URL}' || true"
+    }
+  }
+}
