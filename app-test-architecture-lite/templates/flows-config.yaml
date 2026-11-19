@@ -1,0 +1,8 @@
+# flows/config.yaml —— Maestro workspace 設定（放在 flows/ 根目錄）
+# 為什麼需要：`maestro test flows/` 預設只執行 flows/ 這一層的 yaml；
+# 本架構把 flow 放在 flows/<domain>/ 子資料夾，沒有這個檔會變成「0 支 flow」、報表是空的。
+flows:
+  - "**"          # 遞迴收錄所有子資料夾的 flow
+# 選填：預設排除某些 tag（例如還不穩定的 quarantine）
+# excludeTags:
+#   - quarantine

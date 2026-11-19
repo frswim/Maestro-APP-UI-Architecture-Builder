@@ -1,0 +1,55 @@
+appId: ${app_id}
+---
+# 重複點 target，直到 success_anchor visible 才停
+# 用於 WebView loading mask 吸收 tap 的情境：mask 消失前 tap 都無效，
+# 一直 retry 到 tap 真正生效 (下一頁 anchor 出現)
+# 每輪 anchor 沒出現時也會清阻擋型彈窗（dismiss_blocking_popups.yaml），下一輪自然會重點
+#
+# 呼叫端傳入：
+#   target_text    要點的文字（必須在當前頁 hierarchy 中可見）
+#   success_anchor 成功後下一頁會出現的文字
+#
+# 呼叫方式：
+#   - runFlow:
+#       file: ../../subflows/common/retry_tap_until_visible.yaml
+#       env:
+#         target_text: "<target text>"
+#         success_anchor: "<next page anchor>"
+#         max_retries: "20"   # 選填，硬上限防死循環（前置步驟失敗時 target 永遠點不出下一頁）；預設 30
+#
+# ※ 不用 `while: notVisible anchor`：Maestro 的 notVisible 在 anchor「已出現」時會等它消失，
+#   最多白等 7 秒（減去距上次點擊的時間）；改成每輪用正向 visible 判斷設 flag，anchor 一出現就結束
+- evalScript: "${output.rtuvMax = (typeof max_retries !== 'undefined' && max_retries) ? parseInt(max_retries) : 30}"
+# Maestro 的 repeat.times 若不是合法數字（例如 NaN）會靜默變成無上限 → 一律修正成 1~100 的整數字串
+- evalScript: "${output.rtuvMax = String((output.rtuvMax > 0) ? Math.min(100, output.rtuvMax) : 30)}"
+- evalScript: ${output.rtuvDone = false}
+
+# anchor 一開始就在 → 不點（跟原本 while notVisible 的語意相同）
+- runFlow:
+    when:
+      notVisible: ${success_anchor}
+    commands:
+      - repeat:
+          times: ${output.rtuvMax}
+          while:
+            true: ${!output.rtuvDone}
+          commands:
+            - tapOn:
+                text: ${target_text}
+                retryTapIfNoChange: false
+            - waitForAnimationToEnd:
+                timeout: 5000
+            - runFlow:
+                when:
+                  visible: ${success_anchor}
+                commands:
+                  - evalScript: ${output.rtuvDone = true}
+            - runFlow:
+                when:
+                  true: ${!output.rtuvDone}
+                file: dismiss_blocking_popups.yaml
+
+# 上限用盡仍未出現 success_anchor → 明確報錯（否則靜默往下走更難查）
+- assertVisible:
+    text: ${success_anchor}
+    label: "重點 ${target_text} ${output.rtuvMax} 次仍未出現 ${success_anchor}"

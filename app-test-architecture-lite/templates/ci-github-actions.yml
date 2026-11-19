@@ -1,0 +1,104 @@
+# M15 CI 模板（GitHub Actions）。job 說明：
+#   local-emulator：Linux runner 跑 Android 模擬器；ios-simulator：macOS runner 跑 iOS 模擬器（皆為 Maestro 本機模式，用 run_suite.sh；雲端裝置農場模式屬完整版）
+# 機密全部走 repository secrets；品牌設定檔在 job 內由 secrets 產生，不進版控。
+# GitHub Enterprise Server（GHES，自架）注意：
+#   - `runs-on` 改成 self-hosted labels（例如 [self-hosted, linux, kvm] / [self-hosted, macos]）
+#   - marketplace actions 要經 GitHub Connect 同步或鏡像到內部 org；`actions/upload-artifact@v4` 在 GHES 不支援 → 用 v3 或改傳到內部儲存
+#   - 同一台 Mac 只能一個 job 時用 `concurrency: { group: mac-mini-1 }`
+name: ui-automation
+on:
+  pull_request:            # 冒煙當 merge gate（目標 < 15 分鐘）
+    branches: [main]
+  schedule:                # 夜間完整回歸
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+jobs:
+  local-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45    # CI 層的 watchdog（runner 內還有 MAESTRO_TIMEOUT_MIN）
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r scripts/requirements.txt      # 模板的 requirements.txt 放在 scripts/（或專案根目錄，路徑一致即可）
+      - run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: Write brand config + test data from secrets   # 兩者都被 .gitignore 排除，CI 要自己產生
+        run: |
+          mkdir -p config/brands config/test_data/default
+          cat > config/brands/default.yaml <<EOF
+          device_type: "android"
+          app_id: "${{ vars.APP_ID }}"
+          device: "emulator-5554"
+          user_pw: "${{ secrets.TEST_USER_PW }}"
+          EOF
+          # 測試資料：存成 secret（base64 編碼的 .js），或改成把不含帳密的 test_data 放進版控
+          echo "${{ secrets.TEST_DATA_MAIN_JS_B64 }}" | base64 -d > config/test_data/default/main.js
+      - name: Get app build          # 由 App 的 build pipeline 產出的測試包（保留 testID 的 debug/qa build）
+        run: echo "download the test APK to app-under-test.apk here"   # 例：gh run download / 內部 artifact 庫
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        env:
+          MAESTRO_TIMEOUT_MIN: "40"
+          NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+          REPORT_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # 這個 action 的 script 每一行是獨立的 shell → 變數不能跨行，tag 直接用 expression 算好
+          SUITE_TAG: ${{ github.event_name == 'pull_request' && 'smoke' || 'regression' }}
+        with:
+          api-level: 34
+          script: |
+            adb install -r app-under-test.apk
+            ./scripts/run_suite.sh default flows/ -- --include-tags "$SUITE_TAG"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-report-android
+          path: |
+            report*.html
+            test-results/
+            .last_run_status.json
+
+  ios-simulator:
+    runs-on: macos-latest      # 自架 Mac：改成 [self-hosted, macos]，同一台只能一個 job 時加 concurrency
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r scripts/requirements.txt
+      - run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: Write brand config + test data from secrets
+        run: |
+          mkdir -p config/brands config/test_data/default
+          cat > config/brands/default.yaml <<EOF
+          device_type: "ios"
+          app_id: "${{ vars.IOS_BUNDLE_ID }}"
+          user_pw: "${{ secrets.TEST_USER_PW }}"
+          EOF
+          echo "${{ secrets.TEST_DATA_MAIN_JS_B64 }}" | base64 -d > config/test_data/default/main.js
+      - name: Boot simulator, install app, run
+        env:
+          APP_IOS_SIM_APP: build/App.app          # 模擬器用的 .app（simulator build），由 App pipeline 產出
+          SIM_NAME: "iPhone 15"
+          NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+        run: |
+          UDID=$(xcrun simctl list devices available | grep -m1 "$SIM_NAME (" | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "$APP_IOS_SIM_APP"
+          PLATFORM=ios DEVICE="$UDID" ./scripts/run_suite.sh default flows/ -- --include-tags smoke
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-report-ios
+          path: |
+            report*.html
+            test-results/
+            .last_run_status.json

@@ -1,0 +1,173 @@
+appId: ${app_id}
+---
+# （選擇性先點擊）→ 等錨點；等不到就清阻擋型彈窗，必要時重點
+# 不需要預知彈窗出現在哪個階段：只要該階段被擋住，錨點就等不到，這裡會自動清彈窗
+#
+# 正常路徑（沒有彈窗）：
+#   extendedWaitUntil 在錨點出現當下就返回 → 正向 visible 判斷立即成立 → 結束
+#   ※ 刻意不用 `while: notVisible`：Maestro 的 notVisible 在元素「存在」時會一直等它消失，
+#     最多等 7 秒（減去距上次點擊的時間），會拖慢正常路徑
+# 被擋住時：
+#   每輪最多等 slice_ms；錨點沒出現 → 跑 dismiss_blocking_popups.yaml
+#   → 若真的有關掉彈窗且有 tap_text，代表原本的點擊可能被彈窗吃掉 → 重點一次
+#   （只有「確實關掉彈窗」才重點，避免頁面只是載入慢時重複點擊，例如 Pay Now 重複送單）
+# settle_ms > 0 時：錨點出現後再等畫面穩定並掃一次彈窗
+#   處理「錨點先出現、彈窗緊接著跳出」的情況（這次掃描在沒有彈窗時仍有少量耗時，見 dismiss_blocking_popups.yaml）
+#
+# env（錨點三選一）：
+#   anchor_text   等待「出現」的文字
+#   anchor_id     等待「出現」的 id
+#   gone_text     等待「消失」的文字（例如 Pay Now 消失代表已跳到第三方頁）
+# env（選填）：
+#   tap_text      先點這個文字；被彈窗擋住時也重點它
+#   retap_text    只在「關掉彈窗後」重點的文字，不做第一次點擊（呼叫端自己點過時用）；預設 = tap_text
+#   retap_id      同上，但用 id 重點（可搭配 retap_index）
+#   retap_point   同上，但用座標重點（例如 "70%,8%"）
+#   confirm_text  流程「本來就要點」的確認彈窗按鈕（例如送出後的確認對話框 Okay）
+#                 錨點等不到時先看它在不在，在就點它（不當成阻擋型彈窗關掉，也不重點）
+#   timeout_ms    總等待上限（牆鐘時間，含清彈窗耗時），預設 30000；逾時會 assert 失敗並結束，不會無限等
+#   slice_ms      每輪等待時間，預設 5000
+#   settle_ms     錨點出現後等畫面穩定的時間；預設 0 = 不做結尾掃描
+#
+# 呼叫範例：
+#   - runFlow:
+#       file: ../common/wait_anchor_or_dismiss.yaml
+#       env:
+#         tap_text: ${output.currentChannel}
+#         anchor_text: ${output.selector.<page>.confirmation.payment_amount.text}
+#         timeout_ms: "30000"
+#         settle_ms: "2000"
+# Selectors 在主 flow 中加載
+
+# ---------- 參數正規化（env 沒給時不能直接引用，否則 JS ReferenceError）----------
+- evalScript: "${output.waTap = (typeof tap_text !== 'undefined' && tap_text) ? String(tap_text) : ''}"
+- evalScript: "${output.waRetap = (typeof retap_text !== 'undefined' && retap_text) ? String(retap_text) : output.waTap}"
+- evalScript: "${output.waRetapId = (typeof retap_id !== 'undefined' && retap_id) ? String(retap_id) : ''}"
+- evalScript: "${output.waRetapIndex = (typeof retap_index !== 'undefined' && retap_index !== '') ? String(retap_index) : '0'}"
+- evalScript: "${output.waRetapPoint = (typeof retap_point !== 'undefined' && retap_point) ? String(retap_point) : ''}"
+- evalScript: "${output.waConfirm = (typeof confirm_text !== 'undefined' && confirm_text) ? String(confirm_text) : ''}"
+- evalScript: "${output.waMode = (typeof anchor_text !== 'undefined' && anchor_text) ? 'text' : (typeof anchor_id !== 'undefined' && anchor_id) ? 'id' : (typeof gone_text !== 'undefined' && gone_text) ? 'gone' : ''}"
+- evalScript: "${output.waAnchor = output.waMode == 'text' ? String(anchor_text) : output.waMode == 'id' ? String(anchor_id) : output.waMode == 'gone' ? String(gone_text) : ''}"
+- evalScript: "${output.waTimeout = parseInt((typeof timeout_ms !== 'undefined' && timeout_ms) ? timeout_ms : '30000')}"
+- evalScript: "${output.waTimeout = (output.waTimeout > 0) ? output.waTimeout : 30000}"
+# 低階裝置 / 慢環境：runner 的 TIMEOUT_SCALE 會以 -e timeout_scale 傳入，所有等待上限等比放大
+- evalScript: "${output.waTimeout = Math.floor(output.waTimeout * ((typeof timeout_scale !== 'undefined' && parseFloat(timeout_scale) > 0) ? parseFloat(timeout_scale) : 1))}"
+- evalScript: "${output.waSlice = parseInt((typeof slice_ms !== 'undefined' && slice_ms) ? slice_ms : '5000')}"
+- evalScript: "${output.waSlice = (output.waSlice > 0) ? output.waSlice : 5000}"
+- evalScript: "${output.waSettle = parseInt((typeof settle_ms !== 'undefined' && settle_ms) ? settle_ms : '0')}"
+- evalScript: "${output.waSettle = (output.waSettle > 0) ? output.waSettle : 0}"
+# 防無限等待（兩道保險）：
+#   1. 牆鐘截止時間：while 條件每輪都比對 Date.now()，條件判斷 / 清彈窗花的時間都算進總時長
+#   2. 輪數硬上限：Maestro 的 repeat.times 若不是合法數字會「靜默變成無上限」，
+#      所以這裡一定算出合法整數字串，並封頂 200 輪
+- evalScript: "${output.waDeadline = Date.now() + output.waTimeout}"
+- evalScript: "${output.waRounds = String(Math.min(200, Math.floor(output.waTimeout / output.waSlice) + 2))}"
+- evalScript: ${output.waDone = false}
+
+# 沒給錨點 = 呼叫端寫錯，直接報錯
+- assertTrue:
+    condition: ${output.waMode != ''}
+    label: "wait_anchor_or_dismiss: 必須提供 anchor_text / anchor_id / gone_text 其中之一"
+
+# ---------- 先點擊（選填）----------
+- runFlow:
+    when:
+      true: ${output.waTap != ''}
+    commands:
+      - tapOn: ${output.waTap}
+
+# ---------- 模式 1：等文字出現 ----------
+- runFlow:
+    when:
+      true: ${output.waMode == 'text'}
+    commands:
+      - repeat:
+          times: ${output.waRounds}
+          while:
+            true: ${!output.waDone && Date.now() < output.waDeadline}
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  text: ${output.waAnchor}
+                timeout: ${String(Math.max(500, Math.min(output.waSlice, Math.floor(output.waDeadline - Date.now()))))}
+                optional: true
+            - runFlow:
+                when:
+                  visible:
+                    text: ${output.waAnchor}
+                commands:
+                  - evalScript: ${output.waDone = true}
+            - runFlow:
+                when:
+                  true: ${!output.waDone}
+                file: wait_anchor_retap.yaml
+      - assertVisible:
+          text: ${output.waAnchor}
+          label: "等待逾時（${output.waTimeout}ms）：畫面未出現 ${output.waAnchor}"
+
+# ---------- 模式 2：等 id 出現 ----------
+- runFlow:
+    when:
+      true: ${output.waMode == 'id'}
+    commands:
+      - repeat:
+          times: ${output.waRounds}
+          while:
+            true: ${!output.waDone && Date.now() < output.waDeadline}
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  id: ${output.waAnchor}
+                timeout: ${String(Math.max(500, Math.min(output.waSlice, Math.floor(output.waDeadline - Date.now()))))}
+                optional: true
+            - runFlow:
+                when:
+                  visible:
+                    id: ${output.waAnchor}
+                commands:
+                  - evalScript: ${output.waDone = true}
+            - runFlow:
+                when:
+                  true: ${!output.waDone}
+                file: wait_anchor_retap.yaml
+      - assertVisible:
+          id: ${output.waAnchor}
+          label: "等待逾時（${output.waTimeout}ms）：畫面未出現 id=${output.waAnchor}"
+
+# ---------- 模式 3：等文字消失 ----------
+- runFlow:
+    when:
+      true: ${output.waMode == 'gone'}
+    commands:
+      - repeat:
+          times: ${output.waRounds}
+          while:
+            true: ${!output.waDone && Date.now() < output.waDeadline}
+          commands:
+            - extendedWaitUntil:
+                notVisible:
+                  text: ${output.waAnchor}
+                timeout: ${String(Math.max(500, Math.min(output.waSlice, Math.floor(output.waDeadline - Date.now()))))}
+                optional: true
+            - runFlow:
+                when:
+                  notVisible:
+                    text: ${output.waAnchor}
+                commands:
+                  - evalScript: ${output.waDone = true}
+            - runFlow:
+                when:
+                  true: ${!output.waDone}
+                file: wait_anchor_retap.yaml
+      - assertNotVisible:
+          text: ${output.waAnchor}
+          label: "等待逾時（${output.waTimeout}ms）：${output.waAnchor} 仍未消失"
+
+# ---------- 結尾掃描：錨點出現後彈窗才跳出 ----------
+- runFlow:
+    when:
+      true: ${output.waSettle > 0}
+    commands:
+      - waitForAnimationToEnd:
+          timeout: ${output.waSettle}
+      - runFlow: dismiss_blocking_popups.yaml
