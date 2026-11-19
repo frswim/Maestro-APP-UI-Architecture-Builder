@@ -140,7 +140,6 @@ If a combination isn't covered, or is marked "needs verification", the AI lists 
 ```
 app-test-architecture-builder/
 ├── SKILL.md                     # Entry point: core rules, pipeline, self-check, file index
-├── README.md / README.zh-TW.md  # This file
 ├── references/
 │   ├── interview-pipeline.md    # P0–P6 questions, follow-ups, impact on design, P5.5 tool selection
 │   ├── decision-matrix.md       # Answers → modules, defaults, conflict handling
