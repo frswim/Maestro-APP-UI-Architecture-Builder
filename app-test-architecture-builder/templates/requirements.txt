@@ -1,7 +1,0 @@
-# 報表 / 視覺回歸 / 證據歸檔用（Python 3.9+）
-pillow>=10.0.0
-pyyaml>=6.0
-# 選用：視覺回歸忽略區框選工具（需要有畫面的機器）
-# matplotlib>=3.7
-# 選用：TestRail 回寫
-# requests>=2.31
