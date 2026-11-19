@@ -61,7 +61,7 @@ cp -R app-test-architecture-lite <repo>/.claude/skills/
 ## Lite 與完整版
 
 <!-- 發布前把下面這行的 <FULL_VERSION_URL> 換成完整版（Agensi）的連結 -->
-**完整版**(Coming Soon)：[app-test-architecture-builder](<FULL_VERSION_URL>)
+**完整版**(Coming Soon)：[app-test-architecture-builder](<https://www.agensi.io/skills/app-test-architecture-builder>)
 
 | 面向 | Lite（免費） | 完整版 |
 |---|---|---|
