@@ -1,194 +1,97 @@
-# app-test-architecture-builder
+# app-test-architecture-lite
 
 English | [繁體中文](README.zh-TW.md)
 
-A Claude Code skill that has the AI build or rework a mobile app (Android / iOS / cross-platform / hybrid) UI test-automation architecture for a company in any industry. It follows one flow: **interview → decide → propose → roll out in phases → verify**.
+A free Claude Code skill that has the AI build a mobile app UI test-automation architecture for your company from scratch, using **Maestro**. It follows one flow: **interview → decide → propose → roll out in phases → verify**.
 
-The architecture is modular. The AI first interviews you about your current state, development process, platforms, test scope, infrastructure and reporting needs. It then decides which modules to add and which to leave out, rather than forcing one fixed setup onto every company.
+The AI first asks you 12 questions: current state, platforms, development process, main flow, test data, devices, secrets rules and reporting. It then picks the core modules from a decision table and shows you a proposal. Nothing is created until you approve it. The result is an architecture that runs reliably every day and produces failure reports people can read.
 
-It comes from a production Maestro project that runs daily regression across multiple brands (all identifying details removed). It was then refined through 10 rounds of simulated audits, each using a company from a different industry.
+It comes from a production Maestro project that runs daily regression (all identifying details removed).
 
-> The skill content itself (`SKILL.md`, `references/`, `templates/`) is written in Traditional Chinese. The AI will still answer in the user's language.
-
----
-
-## When to use it
-
-- "Help us set up mobile app test automation for our company."
-- "We already have automation (Maestro / Appium / XCUITest…) but it's flaky. Please assess and improve it."
-- "Port this test architecture to a new product or project."
-- "We want to start UI automation. Where do we begin?"
-
-**Not for**: fixing a single flow or a single locator in an existing, settled project. Use that project's own skills for that.
+> The skill content (`SKILL.md`, `references/`, `templates/`) is written in Traditional Chinese. The AI will still answer in your language.
 
 ---
+
+## What's included
+
+- **Process and rules**: interview pipeline, decision table, quick mode, pre-delivery self-check
+- **Core modules**:
+  - M1 single entry runner (watchdog, device lock, report, exit code)
+  - M2 layered config
+  - M3 externalized locators
+  - M4 data-driven loops
+  - M5 shared subflows
+  - M6 popup and wait resilience
+  - M7 basic back-office API hooks
+  - M9 result judgement and single-file HTML report
+  - M11 re-run failed / flaky marking
+  - M12 element inspection tool
+  - M13 knowledge layer
+  - M14 VCS rules
+  - M15 GitHub Actions
+- **Ready-to-use templates**: `run_suite.sh`, popup helpers, report and judgement scripts, `snap.sh`, notifications (Slack-style / Teams / LINE / email), GitHub Actions, config samples
+- **A Maestro pitfalls list** from real runs, and a worked example with identifying details removed
 
 ## Installation
 
-A skill is a folder. **Copy the whole folder**: `SKILL.md` references files in `references/` and `templates/`.
-
-| Use | Location |
-|---|---|
-| One repo only (can be committed and shared with the team) | `<repo>/.claude/skills/app-test-architecture-builder/` |
-| All projects (personal) | `~/.claude/skills/app-test-architecture-builder/` |
+Copy the whole folder: `SKILL.md` references files in `references/` and `templates/`.
 
 ```bash
-cp -R <source>/app-test-architecture-builder ~/.claude/skills/
+# available in every project
+cp -R app-test-architecture-lite ~/.claude/skills/
+# or for one repo only
+cp -R app-test-architecture-lite <repo>/.claude/skills/
 ```
 
-Start a new Claude Code session after copying.
-
----
+Start a new Claude Code session afterwards.
 
 ## Usage
 
-### 1. Slash command (most reliable)
-
 ```
-/app-test-architecture-builder We want to introduce app test automation. Please plan it.
+/app-test-architecture-lite We want to introduce app test automation with Maestro. Please plan it.
 ```
 
-### 2. Just describe the need
+You can also just describe the need ("set up app test automation for our company") and the AI loads the skill from its description.
+If you're short on time, say "give me a minimal runnable skeleton first". The AI asks only 4 questions and produces an MVP.
 
-Say something like "set up app test automation for our company" or "assess our existing automation framework". The AI loads the skill based on its description. That's the AI's own judgment, so use the slash command if you need to be sure.
+## Requirements
 
-### 3. Quick mode
+- Maestro CLI, a JDK, the Android SDK (iOS needs macOS + Xcode)
+- Python 3.9+ (`pip install -r templates/requirements.txt`)
+- A macOS or Linux runner; on Windows use WSL2
 
-If you're short on time, say "give me a minimal runnable skeleton first". The AI asks only 2 rounds, 7 questions in total:
-- current automation
-- platform
-- whether several apps interact
-- who maintains the tests
-- device source
-- runner OS
-- the first main flow, including any steps outside the app
+## Lite vs. full version
 
-Everything else uses defaults to produce an MVP. The defaults are listed as "assumptions to confirm" and revisited later.
+<!-- Before publishing, replace <FULL_VERSION_URL> on the next line with the link to the full version (Agensi) -->
+**Full version**(Coming Soon): [app-test-architecture-builder](<FULL_VERSION_URL>)
 
-### Good to have ready
-
-- Repo path, if you have one. The AI scans it first and won't ask what it can infer.
-- Test-case spec (Excel / TestRail / Jira, etc.).
-- The first main flow you want automated, from opening the app to the end.
-- Basics about test accounts, devices and CI.
-
----
-
-## Pipeline
-
-```
-P0   Kickoff & scan (read the repo first; don't ask what can be inferred)
-P1   Current automation → new build / incremental rework / run old and new side by side
-P2   Product & platform (app type, multi-brand/tenant, interacting apps, locales, environments, feature flags)
-P3   Development process (cadence, CI/CD, test-case management, who maintains, VCS rules)
-P4   Scope & data (main flow, test data, out-of-app steps, special-capability checklist)
-P5   Infrastructure & constraints (devices, runners, compliance, timeline, staffing)
-P5.5 Tool selection (app tech × who writes × device source × macOS available; recorded as an ADR)
-P6   Reporting & gates (audience, gating rules, visual regression, trends, formal evidence documents)
-P7   Decide (answers → module list)
-P8   Proposal → nothing is created until you approve
-P9   Phased rollout (MVP → expansion), with a checklist per phase
-P10  Handover (user manual, maintainer guide, design docs, release notes)
-```
-
-Each round asks at most 4 multiple-choice questions. After each round the AI reports what it now knows, which modules that implies, and what it will ask next. Answers are collected in `docs/test-architecture/intake.md` and shown to you before the proposal.
-
----
-
-## Modules (M1–M20)
-
-| Module | What it covers | Default |
+| | Lite (free) | Full version |
 |---|---|---|
-| M1 | Single entry runner (config loading, resource switching, output dir, watchdog, report, exit code; cloud-farm mode) | Always |
-| M2 | Layered config (brand / environment / secrets / test data kept apart; Vault, multi-tenant, locales) | Always |
-| M3 | Externalized locators (per platform / brand, `active` switch, `_base` + brand overrides) | Always |
-| M4 | Data-driven loops (account × case, dispatch by type to variant subflows) | Conditional |
-| M5 | Shared subflows (login, navigation, cleanup) | Always |
-| M6 | Resilience (wait-for-anchor + dismiss-popup helper, bounded retries, `TIMEOUT_SCALE`) | Usually |
-| M7 | Back-office / API hooks (approvals, OTP, data setup, counterpart-role bots) | Conditional |
-| M8 | Mocking (proxy response overrides, poor network) | Conditional |
-| M9 | Result judgement + human-readable report (PASS / FAIL / BLOCKED / flaky, masking, i18n, single-file HTML) | Always |
-| M10 | Visual regression (separate capture and check modes, ignore regions) | Conditional |
-| M11 | Re-run failed only, flaky marking | Recommended |
-| M12 | Dev & environment tools (setup script, element inspection, test-file push) | Always |
-| M13 | Knowledge layer (user manual, maintainer guide, subsystem design docs, release notes) | Always |
-| M14 | Collaboration & VCS (`.gitignore`, offline bundle exchange) | Always |
-| M15 | CI integration (GitHub Actions / GitLab / Jenkins / Azure / Bitbucket) | Conditional |
-| M16 | Spec import & traceability (Excel / TestRail / Xray / Zephyr / Azure Test Plans) | Conditional |
-| M17 | Audit evidence (masking, SHA-256 manifest, retention, signed PDF evidence report) | Conditional |
-| M18 | Device pool & parallel runs (device locks, health checks, hardware pool, brand-matrix sampling) | Conditional |
-| M19 | Automated accessibility checks (WCAG) | Conditional |
-| M20 | Result history & trends (weekly pass rate, most failed / flaky) | Conditional |
+| Test tools | Maestro only | Maestro, Appium (Java / Python / TypeScript), XCUITest + Espresso / Compose tests, Detox, Playwright, with setup guides for each |
+| Tool selection | Fixed to Maestro | Picks a tool from app tech, who maintains tests, device source and macOS availability; includes a device-farm × tool compatibility table |
+| Devices | Local emulators/simulators, USB devices | Also cloud device farms (BrowserStack, Sauce, AWS Device Farm, Firebase Test Lab, Maestro Cloud) |
+| Interview | 12 questions | About 30 questions, with follow-ups and branching |
+| Quick mode | 1 round, 4 questions | 2 rounds, 7 questions |
+| Existing frameworks | Absorbing loose scripts | Framework scoring, run-old-and-new-side-by-side rework path with measurable definitions of done |
+| Modules | 13 core modules | 20: adds mocking, visual regression, test-case-system upload, audit evidence, device pools, accessibility, trend reports |
+| Capability catalog | 8 common out-of-app steps (OTP, verification email, back-office approval, payment, upload, permissions, push, location) | 32: also enterprise SSO, TOTP, biometrics, IoT / Bluetooth, in-app purchases, game canvases, media playback, video calls, interacting apps, feature flags, tablets, MDM / kiosk, hardware scanners, App Clips, system wallets, OTA and more |
+| Dimensions | Basic brand and environment handling | Also multi-tenant, multi-locale, feature-flag combinations, tablets, shared white-label locators and brand-matrix sampling |
+| Compliance | Secrets kept out of VCS, basic no-egress settings | Report and log masking, evidence retention (SHA-256 manifest), signed PDF evidence reports, data residency, Vault |
+| CI templates | GitHub Actions | GitHub Actions, GitLab, Jenkins, Azure Pipelines, Bitbucket |
+| Other templates | Runner, re-run, popup helpers, judgement and report, `snap.sh`, notifications, config samples | Also visual regression, trend report, TestRail upload, evidence archiving, device health check |
+| Pitfall lists | Maestro | Maestro + Appium |
+| Worked example | First part of the case (layout, config, locators, loops, helpers, API hooks) | Full case, including report internals and visual regression |
+| Validation | Independent audit with a new sample confirmed it works standalone | 10 rounds of simulated audits across different industries |
 
-[references/decision-matrix.md](references/decision-matrix.md) shows which answer pulls in which module.
+Both versions share the same flow (interview → decide → propose → roll out in phases → verify) and core rules, the same design principles for the core modules, and the same code for the core templates (runner, judgement, report, re-run, popup helpers).
 
----
-
-## Supported tools and environments
-
-- **Test tools**: Maestro (most complete templates), Appium (Java / Python / TypeScript), native XCUITest + Espresso / Compose UI tests, Detox, Playwright (for the web layer of hybrid apps). See [references/tool-adaptation.md](references/tool-adaptation.md) for how to set up the modules with tools other than Maestro.
-- **App tech**: native Android / iOS, React Native, Flutter, Kotlin Multiplatform, hybrid (Ionic / Capacitor, etc.), and embedded canvas UIs such as Unity.
-- **Device sources**: local emulators/simulators, an in-house device lab, BrowserStack / Sauce Labs / AWS Device Farm / Firebase Test Lab / Maestro Cloud. A table shows which device farms support which tools.
-- **Special capabilities**: 32 of them, each with ranked approaches and platform limits, e.g. OTP, TOTP, enterprise SSO, biometrics, push notifications, payment sandboxes, in-app purchases, camera / barcode scanning, hardware scanners, Bluetooth / IoT, poor network and offline sync, video calls, interacting apps, feature flags, tablets, MDM, App Clips. See [references/capability-catalog.md](references/capability-catalog.md).
-
-If a combination isn't covered, or is marked "needs verification", the AI lists it as a pending spike. It proves it with a hello-world test in the real environment before putting it in the proposal.
-
----
-
-## Layout
-
-```
-app-test-architecture-builder/
-├── SKILL.md                     # Entry point: core rules, pipeline, self-check, file index
-├── references/
-│   ├── interview-pipeline.md    # P0–P6 questions, follow-ups, impact on design, P5.5 tool selection
-│   ├── decision-matrix.md       # Answers → modules, defaults, conflict handling
-│   ├── architecture-modules.md  # M1–M20 specs and cross-tool mapping
-│   ├── capability-catalog.md    # 32 special capabilities and how to handle them
-│   ├── tool-adaptation.md       # Appium / pytest / WDIO / native framework setup, result JSON schema
-│   ├── maestro-pitfalls.md      # Maestro behaviour and pitfalls found in real runs
-│   ├── appium-pitfalls.md       # Appium pitfalls
-│   ├── rollout-plan.md          # Phased plans for new builds and reworks, definitions of done
-│   ├── reference-implementation.md  # The original project (identifying details removed)
-│   ├── sanitization-checklist.md    # Checklist for stripping sensitive details
-│   └── audit-history.md         # Issues found and fixed across 10 simulated audits
-└── templates/                   # Ready-to-copy templates
-    ├── run_suite.sh / run_failed.sh               # M1 runner, M11 re-run
-    ├── wait_anchor_or_dismiss.yaml and 3 others   # M6 Maestro resilience helpers
-    ├── failure_rules.py / generate_report.py / _summarize_results.py / flow_index.py   # M9 judgement & report
-    ├── ui_diff_check.py / ui_diff_define_ignore.py / ui_diff_checkpoint.yaml           # M10 visual regression
-    ├── trend_report.py                            # M20 trends
-    ├── archive_evidence.sh / device_health_check.sh   # M17 evidence, M18 device health
-    ├── notify.sh / notify_payload.py              # Notifications (Slack-style / Teams / LINE / email)
-    ├── push_testrail.py                           # TestRail result upload
-    ├── ci-github-actions.yml / ci-gitlab.yml / Jenkinsfile / azure-pipelines.yml / bitbucket-pipelines.yml
-    ├── config-examples.md                         # Brand config, locators, test data, masking, .gitignore samples
-    ├── intake-summary.md / architecture-decision-record.md
-    └── requirements.txt
-```
-
----
-
-## Notes on the templates
-
-- The `*.yaml` helpers are Maestro-only, and `run_suite.sh` is Maestro local mode. With another tool, the runner, wait helper and result format must be rewritten for that tool. The report layout, masking, i18n, visual diff, notifications and trends still work as long as your tests write `*.result.json` files (schema in `tool-adaptation.md` §3.1).
-- The Python scripts need Python 3.9+. Dependencies are in `templates/requirements.txt`.
-- `run_suite.sh` switches targets via environment variables, mainly `TARGET_ENV`, `PLATFORM`, `LOCALE`, `FLAGS`, `FORM_FACTOR`, `DEVICE`, `DEVICE_MODEL` and `TIMEOUT_SCALE`. The script header lists them all.
-- On Windows, use WSL2. Git Bash has no `pkill`, so the watchdog won't work there.
-- The templates share naming conventions: locator paths, loop variable names, helper file names and status-file keys. Rename them together. See section 7 of `SKILL.md`.
-
----
+When Lite meets a need outside its scope, it says so plainly and lists it under "later / out of scope" in the proposal, rather than pretending the Lite templates can do it.
 
 ## Limitations
 
-- The templates pass syntax checks and were exercised with simulated Maestro output and synthetic data. **They have not yet been run end to end on real devices.** On first adoption the AI verifies them in phase 0 with a hello-world test.
-- The compatibility tables (farm support, tool commands, platform limits) will go stale as tools change. Verify against the real environment.
-- Hardware itself (firmware, electrical), voice commands and extended surfaces such as wearables are out of scope. The proposal lists them explicitly as excluded or manual.
+- The templates pass syntax checks and were exercised with simulated data. **They have not yet been run end to end on real devices.** On first adoption the AI verifies them in phase 0 with a hello-world flow.
+- Maestro behaviour can change between versions. Verify against real runs (see `references/maestro-pitfalls.md`).
 
----
+## License
 
-## Maintenance
-
-- Before editing, read [references/audit-history.md](references/audit-history.md) so you don't reintroduce issues that were already fixed.
-- Before adding examples or templates, strip sensitive details using [references/sanitization-checklist.md](references/sanitization-checklist.md). Keep any project-specific keyword list out of the skill.
-- After changes, run one simulated audit with a new fictional company and record it in the same format as `audit-history.md`.
+MIT. See [LICENSE](LICENSE).
