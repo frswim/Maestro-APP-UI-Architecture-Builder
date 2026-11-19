@@ -129,7 +129,6 @@ P10 交付（使用手冊、維護教學、設計文件、release note）
 ```
 app-test-architecture-builder/
 ├── SKILL.md                     # 入口：鐵則、pipeline、自我審核、檔案索引
-├── README.md / README.zh-TW.md  # 本說明
 ├── references/
 │   ├── interview-pipeline.md    # P0～P6 題庫、追問、對架構的影響、P5.5 工具選型
 │   ├── decision-matrix.md       # 答案 → 模組、預設組合、衝突處理
