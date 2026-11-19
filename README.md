@@ -63,7 +63,7 @@ If you're short on time, say "give me a minimal runnable skeleton first". The AI
 ## Lite vs. full version
 
 <!-- Before publishing, replace <FULL_VERSION_URL> on the next line with the link to the full version (Agensi) -->
-**Full version**(Coming Soon): [app-test-architecture-builder](<FULL_VERSION_URL>)
+**Full version**: [app-test-architecture-builder](<https://www.agensi.io/skills/app-test-architecture-builder>)
 
 | | Lite (free) | Full version |
 |---|---|---|
