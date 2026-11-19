@@ -92,6 +92,3 @@ When Lite meets a need outside its scope, it says so plainly and lists it under 
 - The templates pass syntax checks and were exercised with simulated data. **They have not yet been run end to end on real devices.** On first adoption the AI verifies them in phase 0 with a hello-world flow.
 - Maestro behaviour can change between versions. Verify against real runs (see `references/maestro-pitfalls.md`).
 
-## License
-
-MIT. See [LICENSE](LICENSE).
